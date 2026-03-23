@@ -14,8 +14,9 @@ startBtn.onclick = async () => {
     const source = audioContext.createMediaStreamSource(stream);
     
     // AudioWorklet ని లోడ్ చేయడం
-    await audioContext.audioWorklet.addModule('processer.js');
-    noiseProcessor = new AudioWorkletNode(audioContext, 'studio-processor');
+    await audioContext.audioWorklet.addModule('./processor.js');
+
+   noiseProcessor = new AudioWorkletNode(audioContext, 'studio-processor');
     
     source.connect(noiseProcessor).connect(audioContext.destination);
     
