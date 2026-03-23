@@ -7,18 +7,17 @@ const statusText = document.getElementById('statusText');
 
 startBtn.onclick = async () => {
     try {
-        // 1. Latency ని తగ్గించడానికి 'balanced' బదులు 'interactive' వాడదాం
+        // Latency తగ్గించడానికి 'interactive' మోడ్
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            latencyHint: 0, // ఇది అతి తక్కువ డిలే కోసం
+            latencyHint: 'interactive'
         });
 
-        // 2. Delay కి కారణమయ్యే అదనపు ప్రాసెసింగ్‌ని తీసేద్దాం
+        // Reverb మరియు Echo ని ఆపడానికి ఇక్కడ మార్పులు చేశాను
         const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: { 
-                echoCancellation: false, // Delay తగ్గించడానికి ఇది ముఖ్యం
-                noiseSuppression: false, 
-                autoGainControl: false,
-                latency: 0
+                echoCancellation: true, // Reverb ని ఆపడానికి ఇది 'true' ఉండాలి
+                noiseSuppression: true,  // బ్రౌజర్ ఇన్-బిల్ట్ నాయిస్ రిడక్షన్
+                autoGainControl: true 
             } 
         });
         
@@ -26,15 +25,15 @@ startBtn.onclick = async () => {
 
         const source = audioContext.createMediaStreamSource(stream);
 
-        // Filter ని చాలా సింపుల్ గా ఉంచుదాం
+        // Low-pass filter ని కొంచెం షార్ప్ గా సెట్ చేస్తున్నాను
         biquadFilter = audioContext.createBiquadFilter();
         biquadFilter.type = "lowpass";
-        biquadFilter.frequency.value = 15000; 
+        biquadFilter.frequency.value = 8000; // అనవసరమైన హై-పిచ్ నాయిస్ ని కట్ చేస్తుంది
 
-        // Direct Connection (Mic -> Filter -> Destination)
+        // Mic -> Filter -> Speaker
         source.connect(biquadFilter).connect(audioContext.destination);
         
-        statusText.innerText = "లైవ్! డిలే తగ్గిందో లేదో చూడండి.";
+        statusText.innerText = "మైక్రోఫోన్ ఆన్ అయ్యింది. ఇప్పుడు చెక్ చేయండి.";
         learnNoiseBtn.disabled = false;
         startBtn.disabled = true;
 
@@ -45,8 +44,8 @@ startBtn.onclick = async () => {
 
 learnNoiseBtn.onclick = () => {
     if (biquadFilter) {
-        // వాయిస్ క్లారిటీ పోకుండా 5000Hz కి సెట్ చేస్తున్నాను
-        biquadFilter.frequency.setTargetAtTime(5000, audioContext.currentTime, 0.05);
-        statusText.innerText = "నాయిస్ ఫిల్టర్ ఆన్ అయ్యింది.";
+        // ఫ్రీక్వెన్సీని ఇంకా తగ్గించి 3500Hz కి పెడుతున్నాం (నాయిస్ పోవడానికి)
+        biquadFilter.frequency.setTargetAtTime(3500, audioContext.currentTime, 0.1);
+        statusText.innerText = "ఎక్స్‌ట్రా నాయిస్ ఫిల్టర్ అప్లై చేయబడింది.";
     }
 };
