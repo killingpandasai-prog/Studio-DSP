@@ -7,56 +7,69 @@ const statusText = document.getElementById('statusText');
 
 startBtn.onclick = async () => {
     try {
-        // 1. AudioContext ని క్రియేట్ చేయడం (Mobile Compatibility కోసం)
         if (!audioContext) {
             audioContext = new (window.AudioContext || window.webkitAudioContext)();
         }
 
-        // 2. Microphone పర్మిషన్ అడగడం
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { 
-                echoCancellation: false, 
-                noiseSuppression: false, 
-                autoGainControl: false 
-            } 
+            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
         });
         
-        // 3. Audio Context ని Resume చేయడం (Mobile లో ఇది చాలా ముఖ్యం)
         if (audioContext.state === 'suspended') {
             await audioContext.resume();
         }
 
         const source = audioContext.createMediaStreamSource(stream);
+
+        // --- ముఖ్యమైన మార్పు: Processor కోడ్ ని ఇక్కడే String లాగా రాస్తున్నాం ---
+        const processorCode = `
+            class StudioProcessor extends AudioWorkletProcessor {
+                constructor() {
+                    super();
+                    this.noiseFloor = 0.005;
+                    this.isLearning = false;
+                    this.port.onmessage = (e) => { if(e.data === 'learn') this.isLearning = true; };
+                }
+                process(inputs, outputs) {
+                    const input = inputs[0][0];
+                    const output = outputs[0][0];
+                    if (!input || !output) return true;
+                    for (let i = 0; i < input.length; i++) {
+                        let sample = input[i];
+                        if (this.isLearning) {
+                            this.noiseFloor = Math.max(this.noiseFloor, Math.abs(sample) * 1.5);
+                            setTimeout(() => { this.isLearning = false; }, 5000);
+                        }
+                        output[i] = Math.abs(sample) < this.noiseFloor ? sample * 0.1 : sample;
+                    }
+                    return true;
+                }
+            }
+            registerProcessor('studio-processor', StudioProcessor);
+        `;
+
+        // కోడ్ ని Blob కింద మార్చి బ్రౌజర్ కి ఇవ్వడం
+        const blob = new Blob([processorCode], { type: 'application/javascript' });
+        const moduleUrl = URL.createObjectURL(blob);
         
-        // 4. Processor ఫైల్ ని Full URL తో లోడ్ చేయడం
-        const baseUrl = window.location.href.split('?')[0].split('#')[0];
-        const processorUrl = baseUrl.endsWith('/') ? baseUrl + 'processor.js' : baseUrl + '/processor.js';
-        
-        statusText.innerText = "Worklet ని లోడ్ చేస్తున్నాను...";
-        await audioContext.audioWorklet.addModule(processorUrl);
+        statusText.innerText = "DSP బ్రెయిన్ లోడ్ అవుతోంది...";
+        await audioContext.audioWorklet.addModule(moduleUrl);
         
         noiseProcessor = new AudioWorkletNode(audioContext, 'studio-processor');
-        
-        // మైక్రోఫోన్ ని ప్రాసెసర్ కి, ప్రాసెసర్ ని స్పీకర్ కి కనెక్ట్ చేయడం
         source.connect(noiseProcessor).connect(audioContext.destination);
         
-        statusText.innerText = "మైక్రోఫోన్ ఆన్ అయ్యింది! హెడ్‌ఫోన్స్ పెట్టుకుని మాట్లాడండి.";
+        statusText.innerText = "సక్సెస్! ఇప్పుడు మాట్లాడండి.";
         learnNoiseBtn.disabled = false;
-        startBtn.style.background = "#444";
         startBtn.disabled = true;
 
     } catch (err) {
         statusText.innerText = "Error: " + err.message;
-        console.error("DSP Error:", err);
     }
 };
 
 learnNoiseBtn.onclick = () => {
     if (noiseProcessor) {
         noiseProcessor.port.postMessage('learn');
-        statusText.innerText = "గది నాయిస్‌ని స్టడీ చేస్తున్నాను... 5 సెకన్లు నిశ్శబ్దంగా ఉండండి.";
-        setTimeout(() => { 
-            statusText.innerText = "నాయిస్ ప్రొఫైల్ సేవ్ అయ్యింది! ఇప్పుడు మీ వాయిస్ క్లీన్ గా వినిపిస్తుంది."; 
-        }, 5000);
+        statusText.innerText = "5 సెకన్లు నిశ్శబ్దంగా ఉండండి (నాయిస్ స్టడీ చేస్తున్నాను)...";
     }
 };
