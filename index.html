@@ -1,0 +1,56 @@
+<meta name='viewport' content='width=device-width, initial-scale=1'/><!DOCTYPE html>
+<html lang="te">
+<head>
+    <title>StudioVoice Web DSP</title>
+    <style>
+        body { background: #1a1a1a; color: white; font-family: sans-serif; text-align: center; padding: 50px; }
+        button { background: #00ff88; border: none; padding: 15px 30px; font-size: 18px; cursor: pointer; border-radius: 5px; margin: 10px; }
+        .status { color: #888; margin-top: 20px; }
+        canvas { background: #000; width: 80%; height: 200px; border: 1px solid #333; }
+    </style>
+</head>
+<body>
+    <h1>🎙️ StudioVoice DSP Prototype</h1>
+    <p>అన్‌ట్రీటెడ్ రూమ్‌ని స్టూడియోలా మార్చే టెస్టింగ్ గ్రౌండ్</p>
+    
+    <button id="startBtn">Start Microphone</button>
+    <button id="learnNoiseBtn" disabled>Learn Room Noise</button>
+    
+    <div class="status" id="statusText">Microphone ని ఆన్ చేయండి...</div>
+    <canvas id="visualizer"></canvas>
+
+    <script src="app.js"></script>
+</body>
+</html>
+<script>let audioContext;
+let noiseProcessor;
+
+const startBtn = document.getElementById('startBtn');
+const learnNoiseBtn = document.getElementById('learnNoiseBtn');
+const statusText = document.getElementById('statusText');
+
+startBtn.onclick = async () => {
+    audioContext = new AudioContext();
+    const stream = await navigator.mediaDevices.getUserMedia({ 
+        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+    });
+    
+    const source = audioContext.createMediaStreamSource(stream);
+    
+    // AudioWorklet ని లోడ్ చేయడం
+    await audioContext.audioWorklet.addModule('processor.js');
+    noiseProcessor = new AudioWorkletNode(audioContext, 'studio-processor');
+    
+    source.connect(noiseProcessor).connect(audioContext.destination);
+    
+    statusText.innerText = "మైక్రోఫోన్ కనెక్ట్ అయ్యింది! వాయిస్ వినబడుతుందా?";
+    learnNoiseBtn.disabled = false;
+    startBtn.disabled = true;
+};
+
+learnNoiseBtn.onclick = () => {
+    noiseProcessor.port.postMessage('learn');
+    statusText.innerText = "గది నాయిస్‌ని స్టడీ చేస్తున్నాను... 5 సెకన్లు నిశ్శబ్దంగా ఉండండి.";
+    setTimeout(() => { statusText.innerText = "నాయిస్ ప్రొఫైల్ సేవ్ అయ్యింది! ఇప్పుడు మాట్లాడండి."; }, 5000);
+};
+</script>
