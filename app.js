@@ -7,17 +7,18 @@ const statusText = document.getElementById('statusText');
 
 startBtn.onclick = async () => {
     try {
-        // Latency తగ్గించడానికి 'interactive' మోడ్ వాడుతున్నాం
+        // 1. Latency ని తగ్గించడానికి 'balanced' బదులు 'interactive' వాడదాం
         audioContext = new (window.AudioContext || window.webkitAudioContext)({
-            latencyHint: 'interactive',
-            sampleRate: 44100,
+            latencyHint: 0, // ఇది అతి తక్కువ డిలే కోసం
         });
 
+        // 2. Delay కి కారణమయ్యే అదనపు ప్రాసెసింగ్‌ని తీసేద్దాం
         const stream = await navigator.mediaDevices.getUserMedia({ 
             audio: { 
-                echoCancellation: true, 
+                echoCancellation: false, // Delay తగ్గించడానికి ఇది ముఖ్యం
                 noiseSuppression: false, 
-                autoGainControl: true 
+                autoGainControl: false,
+                latency: 0
             } 
         });
         
@@ -25,22 +26,15 @@ startBtn.onclick = async () => {
 
         const source = audioContext.createMediaStreamSource(stream);
 
-        // స్టట్టరింగ్ తగ్గించడానికి కంప్రెసర్ యాడ్ చేస్తున్నాం
-        const compressor = audioContext.createDynamicsCompressor();
-        compressor.threshold.setValueAtTime(-24, audioContext.currentTime);
-        compressor.knee.setValueAtTime(40, audioContext.currentTime);
-        compressor.ratio.setValueAtTime(12, audioContext.currentTime);
-        compressor.attack.setValueAtTime(0, audioContext.currentTime);
-        compressor.release.setValueAtTime(0.25, audioContext.currentTime);
-
+        // Filter ని చాలా సింపుల్ గా ఉంచుదాం
         biquadFilter = audioContext.createBiquadFilter();
         biquadFilter.type = "lowpass";
         biquadFilter.frequency.value = 15000; 
 
-        // Mic -> Compressor -> Filter -> Speaker
-        source.connect(compressor).connect(biquadFilter).connect(audioContext.destination);
+        // Direct Connection (Mic -> Filter -> Destination)
+        source.connect(biquadFilter).connect(audioContext.destination);
         
-        statusText.innerText = "మైక్రోఫోన్ క్లియర్ గా ఉంది! స్టట్టరింగ్ తగ్గుతుందో లేదో చూడండి.";
+        statusText.innerText = "లైవ్! డిలే తగ్గిందో లేదో చూడండి.";
         learnNoiseBtn.disabled = false;
         startBtn.disabled = true;
 
@@ -51,8 +45,8 @@ startBtn.onclick = async () => {
 
 learnNoiseBtn.onclick = () => {
     if (biquadFilter) {
-        // ఫ్రీక్వెన్సీని మరీ తక్కువ చేయకుండా 4000Hz కి పెడుతున్నాం (క్లారిటీ కోసం)
-        biquadFilter.frequency.setTargetAtTime(4000, audioContext.currentTime, 0.1);
-        statusText.innerText = "నాయిస్ తగ్గించబడింది. ఇప్పుడు వాయిస్ స్మూత్ గా రావాలి.";
+        // వాయిస్ క్లారిటీ పోకుండా 5000Hz కి సెట్ చేస్తున్నాను
+        biquadFilter.frequency.setTargetAtTime(5000, audioContext.currentTime, 0.05);
+        statusText.innerText = "నాయిస్ ఫిల్టర్ ఆన్ అయ్యింది.";
     }
 };
