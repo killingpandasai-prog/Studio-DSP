@@ -3,9 +3,13 @@ class StudioProcessor extends AudioWorkletProcessor {
         super();
         this.noiseProfile = new Float32Array(128).fill(0);
         this.isLearning = false;
-        this.port.onmessage = (e) => { 
-            if(e.data === 'learn') this.isLearning = true;
-            if(e.data === 'stop-learn') this.isLearning = false;
+        this.learnCount = 0;
+
+        this.port.onmessage = (e) => {
+            if (e.data === 'learn') {
+                this.isLearning = true;
+                this.learnCount = 0;
+            }
         };
     }
 
@@ -13,22 +17,27 @@ class StudioProcessor extends AudioWorkletProcessor {
         const input = inputs[0][0];
         const output = outputs[0][0];
 
-        if (!input) return true;
+        if (!input || !output) return true;
 
         for (let i = 0; i < input.length; i++) {
-            // 1. Simple Noise Reduction (Subtraction Logic)
+            let sample = input[i];
+
+            // 1. Learning Phase: నాయిస్ లెవల్స్ ని సేవ్ చేయడం
             if (this.isLearning) {
-                this.noiseProfile[i] = Math.max(this.noiseProfile[i], Math.abs(input[i]));
+                this.noiseProfile[i] = Math.max(this.noiseProfile[i], Math.abs(sample));
+                this.learnCount++;
+                if (this.learnCount > 20000) this.isLearning = false; // 5 సెకన్ల తర్వాత ఆగిపోతుంది
             }
 
-            // 2. Applying the Filter
-            let cleanSignal = input[i];
-            if (Math.abs(input[i]) < this.noiseProfile[i] * 1.5) {
-                cleanSignal = 0; // Low-level noise ని కట్ చేయడం (Gating)
+            // 2. Simple Noise Gate: నాయిస్ ప్రొఫైల్ కంటే తక్కువ ఉన్న శబ్దాన్ని కట్ చేయడం
+            let cleanSample = sample;
+            let threshold = this.noiseProfile[i] * 1.5; 
+            
+            if (Math.abs(sample) < threshold) {
+                cleanSample *= 0.1; // నాయిస్ ని బాగా తగ్గించడం
             }
 
-            // 3. Simple Echo Suppression (Transient control)
-            output[i] = cleanSignal; 
+            output[i] = cleanSample; 
         }
 
         return true;
