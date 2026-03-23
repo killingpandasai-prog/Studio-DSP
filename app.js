@@ -1,5 +1,5 @@
 let audioContext;
-let biquadFilter; // ఇది నాయిస్ ని కట్ చేస్తుంది
+let biquadFilter;
 
 const startBtn = document.getElementById('startBtn');
 const learnNoiseBtn = document.getElementById('learnNoiseBtn');
@@ -7,24 +7,40 @@ const statusText = document.getElementById('statusText');
 
 startBtn.onclick = async () => {
     try {
-        audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        // Latency తగ్గించడానికి 'interactive' మోడ్ వాడుతున్నాం
+        audioContext = new (window.AudioContext || window.webkitAudioContext)({
+            latencyHint: 'interactive',
+            sampleRate: 44100,
+        });
+
         const stream = await navigator.mediaDevices.getUserMedia({ 
-            audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } 
+            audio: { 
+                echoCancellation: true, 
+                noiseSuppression: false, 
+                autoGainControl: true 
+            } 
         });
         
         if (audioContext.state === 'suspended') await audioContext.resume();
 
         const source = audioContext.createMediaStreamSource(stream);
 
-        // 1. Low-Pass Filter క్రియేట్ చేయడం (గాలి శబ్దం లాంటి హై-ఫ్రీక్వెన్సీ నాయిస్ ని తగ్గించడానికి)
+        // స్టట్టరింగ్ తగ్గించడానికి కంప్రెసర్ యాడ్ చేస్తున్నాం
+        const compressor = audioContext.createDynamicsCompressor();
+        compressor.threshold.setValueAtTime(-24, audioContext.currentTime);
+        compressor.knee.setValueAtTime(40, audioContext.currentTime);
+        compressor.ratio.setValueAtTime(12, audioContext.currentTime);
+        compressor.attack.setValueAtTime(0, audioContext.currentTime);
+        compressor.release.setValueAtTime(0.25, audioContext.currentTime);
+
         biquadFilter = audioContext.createBiquadFilter();
         biquadFilter.type = "lowpass";
-        biquadFilter.frequency.value = 20000; // మొదట అన్ని శబ్దాలను రానిద్దాం
+        biquadFilter.frequency.value = 15000; 
 
-        // Mic -> Filter -> Speaker
-        source.connect(biquadFilter).connect(audioContext.destination);
+        // Mic -> Compressor -> Filter -> Speaker
+        source.connect(compressor).connect(biquadFilter).connect(audioContext.destination);
         
-        statusText.innerText = "మైక్రోఫోన్ లైవ్ లో ఉంది! ఇప్పుడు 'Learn' బటన్ నొక్కండి.";
+        statusText.innerText = "మైక్రోఫోన్ క్లియర్ గా ఉంది! స్టట్టరింగ్ తగ్గుతుందో లేదో చూడండి.";
         learnNoiseBtn.disabled = false;
         startBtn.disabled = true;
 
@@ -34,13 +50,9 @@ startBtn.onclick = async () => {
 };
 
 learnNoiseBtn.onclick = () => {
-    statusText.innerText = "నాయిస్ ఫిల్టర్ అప్లై చేస్తున్నాను...";
-    
-    // ఫ్రీక్వెన్సీని 3000Hz కి తగ్గిస్తున్నాం (ఇది బ్యాక్‌గ్రౌండ్ నాయిస్ ని బాగా తగ్గిస్తుంది)
-    // మీ వాయిస్ కొంచెం మందంగా అనిపించవచ్చు, కానీ నాయిస్ పోతుంది.
     if (biquadFilter) {
-        biquadFilter.frequency.setValueAtTime(3000, audioContext.currentTime);
-        statusText.innerText = "ఫిల్టర్ ఆన్ అయ్యింది! ఇప్పుడు మీ వాయిస్ లో తేడా గమనించండి.";
-        statusText.style.color = "#00ff88";
+        // ఫ్రీక్వెన్సీని మరీ తక్కువ చేయకుండా 4000Hz కి పెడుతున్నాం (క్లారిటీ కోసం)
+        biquadFilter.frequency.setTargetAtTime(4000, audioContext.currentTime, 0.1);
+        statusText.innerText = "నాయిస్ తగ్గించబడింది. ఇప్పుడు వాయిస్ స్మూత్ గా రావాలి.";
     }
 };
