@@ -3,7 +3,10 @@ class StudioProcessor extends AudioWorkletProcessor {
         super();
         this.noiseProfile = new Float32Array(128).fill(0);
         this.isLearning = false;
-        this.port.onmessage = (e) => { if(e.data === 'learn') this.isLearning = true; };
+        this.port.onmessage = (e) => { 
+            if(e.data === 'learn') this.isLearning = true;
+            if(e.data === 'stop-learn') this.isLearning = false;
+        };
     }
 
     process(inputs, outputs) {
